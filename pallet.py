@@ -2,6 +2,8 @@ import pandas as pd
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkcalendar import DateEntry
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
 
 def load_file(label, book_var):
     filepath = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
@@ -110,14 +112,28 @@ def process_data():
         if not existing_data_index.empty:
             # Проверяем, заполнены ли уже данные в строке
             if 'Количество паллет' in df_target.columns:
-                if pd.isna(df_target.loc[existing_data_index, 'Количество паллет']).all():
-                    # Добавляем количество паллет
-                    existing_pallets = df_target.loc[existing_data_index, 'Количество паллет'].sum()
-                    new_pallets = filtered_data['Количество паллет'].sum()
-                    df_target.loc[existing_data_index, 'Количество паллет'] = existing_pallets + new_pallets
+                existing_pallets = df_target.loc[existing_data_index, 'Количество паллет'].sum()
+                new_pallets = filtered_data['Количество паллет'].sum()
+
+                # Выделение ячеек
+                workbook = load_workbook(second_file_path)
+                sheet = workbook[sheet_name_tgt]
+
+                if existing_pallets == new_pallets:
+                    fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")  # Зеленый
+                    for index in existing_data_index:
+                        cell = sheet.cell(row=index+2, column=df_target.columns.get_loc('Количество паллет') + 1)  # +2 для учета заголовков и индекса
+                        cell.fill = fill
                 else:
-                    # Если значение уже заполнено
-                    messagebox.showinfo("Информация", "Строка уже заполнена.")
+                    fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")  # Красный
+                    for index in existing_data_index:
+                        cell = sheet.cell(row=index+2, column=df_target.columns.get_loc('Количество паллет') + 1)
+                        cell.fill = fill
+                    messagebox.showwarning("Предупреждение", "Количество паллет не совпадает с указанным значением!")
+
+                # Обновляем количество паллет
+                df_target.loc[existing_data_index, 'Количество паллет'] = existing_pallets + new_pallets
+
             else:
                 messagebox.showerror("Ошибка", "В целевой таблице отсутствует колонка 'Количество паллет'.")
                 return
@@ -130,6 +146,10 @@ def process_data():
 
         # Сохраняем обновленную таблицу в тот же файл
         df_target.to_excel(second_file_path, sheet_name=sheet_name_tgt, index=False)
+
+        # Сохранение изменений в форматированном файле
+        workbook.save(second_file_path)
+
         messagebox.showinfo("Успех", "Данные успешно добавлены и обновлены в существующей таблице!")
 
     except Exception as e:
@@ -165,20 +185,15 @@ book_combobox2.pack(pady=5)
 tk.Label(root, text="Выберите распределительный центр:").pack(pady=5)
 rcenter_combo = ttk.Combobox(root)
 rcenter_combo.pack(pady=5)
-rcenter_combo.bind("<<ComboboxSelected>>", lambda _: update_dates_list())
+rcenter_combo.bind("<<ComboboxSelected>>", lambda e: update_dates_list())
 
-# Поле для выбора даты через комбобокс
+# Поле для выбора даты
 tk.Label(root, text="Выберите дату:").pack(pady=5)
 date_combobox = ttk.Combobox(root)
 date_combobox.pack(pady=5)
 
 # Кнопка для обработки данных
-process_button = tk.Button(root, text="Загрузить данные и обработать", command=process_data)
-process_button.pack(pady=10)
+process_button = tk.Button(root, text="Обработать данные", command=process_data)
+process_button.pack(pady=20)
 
-# Переменные для хранения путей к файлам и имен таблиц
-first_file_path = None
-second_file_path = None
-
-# Запуск приложения
 root.mainloop()
