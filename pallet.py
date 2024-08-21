@@ -2,7 +2,6 @@ import pandas as pd
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkcalendar import DateEntry
-from datetime import datetime
 
 def load_file(label, book_var):
     filepath = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
@@ -58,19 +57,11 @@ def update_dates_list():
 
         if 'Дата' in filtered_df.columns:
             dates = sorted(filtered_df['Дата'].dropna().unique().tolist())
-            # Обновляем DateEntry с доступными датами
+            # Обновляем список дат для выбора
             if dates:
-                # Установим минимальную и максимальную дату
-                min_date = min(dates)
-                max_date = max(dates)
-                date_entry.config(
-                    mindate=min_date,
-                    maxdate=max_date,
-                    date_pattern='y-mm-dd'
-                )
-                # Установим текущую дату как первую доступную
+                date_combobox['values'] = [date.strftime('%Y-%m-%d') for date in dates]
                 if dates:
-                    date_entry.set_date(min_date)
+                    date_combobox.current(0)
         else:
             messagebox.showerror("Ошибка", "В первой таблице не найдена колонка 'Дата'.")
     except Exception as e:
@@ -89,7 +80,7 @@ def process_data():
         df_target = pd.read_excel(second_file_path, sheet_name=sheet_name_tgt)
 
         # Получаем значения для фильтрации
-        date = date_entry.get_date().strftime('%Y-%m-%d')
+        date = date_combobox.get()
         rcenter = rcenter_combo.get()
 
         # Преобразуем колонку с датами в datetime формат для корректной фильтрации
@@ -140,10 +131,10 @@ rcenter_combo = ttk.Combobox(root)
 rcenter_combo.pack(pady=5)
 rcenter_combo.bind("<<ComboboxSelected>>", lambda _: update_dates_list())
 
-# Поле для выбора даты через календарь
+# Поле для выбора даты через комбобокс
 tk.Label(root, text="Выберите дату:").pack(pady=5)
-date_entry = DateEntry(root, selectmode='day', date_pattern='y-mm-dd')
-date_entry.pack(pady=5)
+date_combobox = ttk.Combobox(root)
+date_combobox.pack(pady=5)
 
 # Кнопка для обработки данных
 process_button = tk.Button(root, text="Загрузить данные и обработать", command=process_data)
