@@ -2,13 +2,12 @@ import pandas as pd
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkcalendar import DateEntry
-import os
+from datetime import datetime
 
 def load_file(label, book_var):
     filepath = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
     if filepath:
         label.config(text=f"Выбранный файл: {filepath}")
-        # Открываем файл и обновляем доступные книги
         try:
             excel_file = pd.ExcelFile(filepath)
             book_var.set(excel_file.sheet_names[0] if excel_file.sheet_names else '')
@@ -59,8 +58,19 @@ def update_dates_list():
 
         if 'Дата' in filtered_df.columns:
             dates = sorted(filtered_df['Дата'].dropna().unique().tolist())
-            # Обновляем виджет DateEntry с возможными датами
-            date_entry.config(date_pattern='y-mm-dd')
+            # Обновляем DateEntry с доступными датами
+            if dates:
+                # Установим минимальную и максимальную дату
+                min_date = min(dates)
+                max_date = max(dates)
+                date_entry.config(
+                    mindate=min_date,
+                    maxdate=max_date,
+                    date_pattern='y-mm-dd'
+                )
+                # Установим текущую дату как первую доступную
+                if dates:
+                    date_entry.set_date(min_date)
         else:
             messagebox.showerror("Ошибка", "В первой таблице не найдена колонка 'Дата'.")
     except Exception as e:
