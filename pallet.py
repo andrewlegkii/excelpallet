@@ -89,12 +89,30 @@ def process_data():
         # Применяем фильтр по дате и распределительному центру
         filtered_data = df_source[(df_source['Распределительный Центр'] == rcenter) & (df_source['Дата'].dt.strftime('%Y-%m-%d') == date)]
 
-        # Вставляем данные в целевую таблицу (уже существующую)
-        df_target = pd.concat([df_target, filtered_data], ignore_index=True)
+        if filtered_data.empty:
+            messagebox.showwarning("Ошибка", "Нет данных для выбранного распределительного центра и даты.")
+            return
+
+        # Проверяем, существуют ли уже данные с таким распределительным центром и датой
+        if not df_target.empty:
+            # Преобразуем колонку с датами в datetime формат для корректной фильтрации
+            df_target['Дата'] = pd.to_datetime(df_target['Дата'], format='%Y-%m-%d', errors='coerce')
+            
+            existing_data = df_target[(df_target['Распределительный Центр'] == rcenter) & (df_target['Дата'] == pd.to_datetime(date))]
+            if not existing_data.empty:
+                if 'Количество паллет' in existing_data.columns:
+                    df_target.loc[existing_data.index, 'Количество паллет'] += filtered_data['Количество паллет'].sum()
+                    df_target = df_target.drop_duplicates(subset=['Распределительный Центр', 'Дата'], keep='last')
+                else:
+                    messagebox.showerror("Ошибка", "В целевой таблице отсутствует колонка 'Количество паллет'.")
+                    return
+            else:
+                # Если данных нет, добавляем новые
+                df_target = pd.concat([df_target, filtered_data], ignore_index=True)
 
         # Сохраняем обновленную таблицу в тот же файл
         df_target.to_excel(second_file_path, sheet_name=sheet_name_tgt, index=False)
-        messagebox.showinfo("Успех", "Данные успешно добавлены в существующую таблицу!")
+        messagebox.showinfo("Успех", "Данные успешно добавлены и обновлены в существующей таблице!")
 
     except Exception as e:
         messagebox.showerror("Ошибка", f"Произошла ошибка: {str(e)}")
