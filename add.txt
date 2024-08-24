@@ -1,0 +1,164 @@
+Чтобы адаптировать код под другую таблицу с разными столбцами, нужно изменить несколько ключевых частей кода. Вот инструкция, как это сделать:
+
+### 1. **Столбцы для обработки данных**
+
+В коде есть несколько мест, где используются определенные названия столбцов. Вам нужно будет заменить их на соответствующие названия столбцов вашей новой таблицы.
+
+#### Где искать и что изменять:
+
+1. **Столбец для фильтрации распределительного центра**
+   - **Текущий код:**
+     ```python
+     df_source['Распределительный Центр'] == rcenter
+     ```
+   - **Новая таблица:**
+     Измените `'Распределительный Центр'` на название вашего нового столбца, например, `'New_RC'`.
+
+2. **Столбец для даты**
+   - **Текущий код:**
+     ```python
+     df_source['Дата']
+     ```
+   - **Новая таблица:**
+     Измените `'Дата'` на название вашего нового столбца, например, `'New_Date'`.
+
+3. **Столбец для количества паллет**
+   - **Текущий код:**
+     ```python
+     df_source['Количество паллет']
+     ```
+   - **Новая таблица:**
+     Измените `'Количество паллет'` на название вашего нового столбца, например, `'New_Pallets'`.
+
+4. **Проверка наличия колонок в таблицах**
+   - **Текущий код:**
+     ```python
+     if 'Дата' not in df_target.columns or 'Распределительный Центр' not in df_target.columns:
+     ```
+   - **Новая таблица:**
+     Измените `'Дата'` и `'Распределительный Центр'` на новые столбцы, например, `'New_Date'` и `'New_RC'`.
+
+### 2. **Изменение в функции `process_data`**
+
+Функция `process_data` обрабатывает данные и включает проверку наличия нужных столбцов и корректное использование столбцов. Вам нужно будет заменить имена столбцов на те, что есть в вашей новой таблице.
+
+#### Где искать и что изменять:
+
+1. **Фильтрация данных по распределительному центру и дате**
+   - **Текущий код:**
+     ```python
+     filtered_data = df_source[(df_source['Распределительный Центр'] == rcenter) & (df_source['Дата'] == pd.to_datetime(date).date())]
+     ```
+   - **Новая таблица:**
+     Измените `'Распределительный Центр'` и `'Дата'` на новые столбцы, например, `'New_RC'` и `'New_Date'`.
+
+2. **Обновление данных в таблице**
+   - **Текущий код:**
+     ```python
+     df_target['Дата'] = pd.to_datetime(df_target['Дата'], format='%Y-%m-%d', errors='coerce').dt.date
+     df_target = pd.concat([df_target, filtered_data], ignore_index=True)
+     df_target = df_target.drop_duplicates(subset=['Распределительный Центр', 'Дата'], keep='last')
+     ```
+   - **Новая таблица:**
+     Измените `'Дата'` и `'Распределительный Центр'` на новые столбцы, например, `'New_Date'` и `'New_RC'`.
+
+### 3. **Изменение в функции `update_rcenter_list`**
+
+Функция `update_rcenter_list` обновляет список распределительных центров. Убедитесь, что название столбца, который содержит распределительные центры, совпадает с новым столбцом.
+
+#### Где искать и что изменять:
+
+1. **Получение уникальных значений распределительного центра**
+   - **Текущий код:**
+     ```python
+     if 'Распределительный Центр' in df.columns:
+         rcenters = sorted(df['Распределительный Центр'].unique().tolist())
+     ```
+   - **Новая таблица:**
+     Измените `'Распределительный Центр'` на название вашего нового столбца, например, `'New_RC'`.
+
+### Пример изменения столбцов
+
+Если ваши новые столбцы называются следующим образом:
+- Распределительный центр: `New_RC`
+- Дата: `New_Date`
+- Количество паллет: `New_Pallets`
+
+Вот как будет выглядеть адаптированный код:
+
+```python
+# Обновляем функцию для фильтрации данных
+def process_data():
+    try:
+        if not first_file_path or not second_file_path:
+            update_status("Ошибка: Выберите оба файла.", "red")
+            return
+
+        sheet_name_src = first_book_var.get()
+        sheet_name_tgt = second_book_var.get()
+
+        df_source = pd.read_excel(first_file_path, sheet_name=sheet_name_src)
+        df_target = pd.read_excel(second_file_path, sheet_name=sheet_name_tgt)
+
+        date = date_combobox.get()
+        rcenter = rcenter_combo.get()
+
+        df_source['New_Date'] = pd.to_datetime(df_source['New_Date'], format='%Y-%m-%d', errors='coerce').dt.date
+        filtered_data = df_source[(df_source['New_RC'] == rcenter) & (df_source['New_Date'] == pd.to_datetime(date).date())]
+
+        if filtered_data.empty:
+            update_status("Ошибка: Нет данных для выбранного распределительного центра и даты.", "red")
+            return
+
+        if 'New_Pallets' not in filtered_data.columns:
+            update_status("Ошибка: В первой таблице отсутствует колонка 'New_Pallets'.", "red")
+            return
+
+        if 'New_Date' not in df_target.columns or 'New_RC' not in df_target.columns:
+            update_status("Ошибка: В целевой таблице отсутствуют необходимые колонки.", "red")
+            return
+
+        df_target['New_Date'] = pd.to_datetime(df_target['New_Date'], format='%Y-%m-%d', errors='coerce').dt.date
+
+        workbook = load_workbook(second_file_path)
+        sheet = workbook[sheet_name_tgt]
+
+        existing_data_index = df_target[(df_target['New_RC'] == rcenter) & (df_target['New_Date'] == pd.to_datetime(date).date())].index
+
+        fill_green = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
+        fill_red = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+
+        if not existing_data_index.empty:
+            for index in existing_data_index:
+                row_num = index + 2
+                pallets_cell = sheet.cell(row=row_num, column=df_target.columns.get_loc('New_Pallets') + 1)
+
+                existing_pallets = df_target.loc[index, 'New_Pallets']
+                new_pallets = filtered_data['New_Pallets'].sum()
+
+                if existing_pallets == new_pallets:
+                    pallets_cell.fill = fill_green
+                else:
+                    pallets_cell.fill = fill_red
+                    update_status("Ошибка: Количество паллет не совпадает!", "red")
+        else:
+            new_rows = []
+            for _, row in filtered_data.iterrows():
+                new_rows.append([row['New_Date'], row['New_RC'], row['New_Pallets']])
+
+            for new_row in new_rows:
+                sheet.append(new_row)
+
+            update_status("Запрос обработан", "green")
+
+        df_target = pd.concat([df_target, filtered_data], ignore_index=True)
+        df_target = df_target.drop_duplicates(subset=['New_RC', 'New_Date'], keep='last')
+        df_target.to_excel(second_file_path, sheet_name=sheet_name_tgt, index=False)
+
+        workbook.save(second_file_path)
+
+    except Exception as e:
+        update_status(f"Произошла ошибка: {str(e)}", "red")
+```
+
+Эти изменения позволят вам адаптировать код под новую таблицу с другим набором столбцов.

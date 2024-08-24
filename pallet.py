@@ -29,7 +29,7 @@ def select_second_file():
 
 def update_rcenter_list():
     if not first_file_path:
-        messagebox.showwarning("Ошибка", "Выберите первую таблицу для загрузки распределительных центров.")
+        update_status("Ошибка: Выберите первую таблицу для загрузки распределительных центров.", "red")
         return
     
     try:
@@ -41,10 +41,11 @@ def update_rcenter_list():
             if rcenters:
                 rcenter_combo.current(0)
                 update_dates_list()
+                update_status("Данные распределительных центров загружены.", "green")
         else:
-            messagebox.showerror("Ошибка", "В первой таблице не найдена колонка 'Распределительный Центр'.")
+            update_status("Ошибка: В первой таблице не найдена колонка 'Распределительный Центр'.", "red")
     except Exception as e:
-        messagebox.showerror("Ошибка", f"Произошла ошибка при загрузке данных: {str(e)}")
+        update_status(f"Ошибка при загрузке данных: {str(e)}", "red")
 
 def update_dates_list():
     rcenter = rcenter_combo.get()
@@ -62,15 +63,16 @@ def update_dates_list():
                 date_combobox['values'] = [date.strftime('%Y-%m-%d') for date in dates]
                 if dates:
                     date_combobox.current(0)
+                update_status("Даты обновлены.", "green")
         else:
-            messagebox.showerror("Ошибка", "В первой таблице не найдена колонка 'Дата'.")
+            update_status("Ошибка: В первой таблице не найдена колонка 'Дата'.", "red")
     except Exception as e:
-        messagebox.showerror("Ошибка", f"Произошла ошибка при загрузке дат: {str(e)}")
+        update_status(f"Ошибка при загрузке дат: {str(e)}", "red")
 
 def process_data():
     try:
         if not first_file_path or not second_file_path:
-            messagebox.showwarning("Ошибка", "Выберите оба файла.")
+            update_status("Ошибка: Выберите оба файла.", "red")
             return
 
         sheet_name_src = first_book_var.get()
@@ -86,15 +88,15 @@ def process_data():
         filtered_data = df_source[(df_source['Распределительный Центр'] == rcenter) & (df_source['Дата'] == pd.to_datetime(date).date())]
 
         if filtered_data.empty:
-            status_label.config(text="Ошибка: Нет данных для выбранного распределительного центра и даты.", fg="red")
+            update_status("Ошибка: Нет данных для выбранного распределительного центра и даты.", "red")
             return
 
         if 'Количество паллет' not in filtered_data.columns:
-            messagebox.showerror("Ошибка", "В первой таблице отсутствует колонка 'Количество паллет'.")
+            update_status("Ошибка: В первой таблице отсутствует колонка 'Количество паллет'.", "red")
             return
 
         if 'Дата' not in df_target.columns or 'Распределительный Центр' not in df_target.columns:
-            messagebox.showerror("Ошибка", "В целевой таблице отсутствуют необходимые колонки.")
+            update_status("Ошибка: В целевой таблице отсутствуют необходимые колонки.", "red")
             return
 
         df_target['Дата'] = pd.to_datetime(df_target['Дата'], format='%Y-%m-%d', errors='coerce').dt.date
@@ -104,13 +106,12 @@ def process_data():
 
         existing_data_index = df_target[(df_target['Распределительный Центр'] == rcenter) & (df_target['Дата'] == pd.to_datetime(date).date())].index
 
-        if not existing_data_index.empty:
-            # Обновляем существующие строки и выделяем цветом
-            fill_green = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
-            fill_red = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+        fill_green = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
+        fill_red = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
 
+        if not existing_data_index.empty:
             for index in existing_data_index:
-                row_num = index + 2  # +2 для учета заголовка и 0-индекса
+                row_num = index + 2
                 pallets_cell = sheet.cell(row=row_num, column=df_target.columns.get_loc('Количество паллет') + 1)
 
                 existing_pallets = df_target.loc[index, 'Количество паллет']
@@ -120,9 +121,8 @@ def process_data():
                     pallets_cell.fill = fill_green
                 else:
                     pallets_cell.fill = fill_red
-                    status_label.config(text="Ошибка: Количество паллет не совпадает!", fg="red")
+                    update_status("Ошибка: Количество паллет не совпадает!", "red")
         else:
-            # Добавляем новые строки и проверяем дублирование
             new_rows = []
             for _, row in filtered_data.iterrows():
                 new_rows.append([row['Дата'], row['Распределительный Центр'], row['Количество паллет']])
@@ -130,13 +130,20 @@ def process_data():
             for new_row in new_rows:
                 sheet.append(new_row)
 
-            status_label.config(text="Запрос обработан", fg="green")
+            update_status("Запрос обработан", "green")
 
-        # Сохраняем изменения в файле
+        df_target = pd.concat([df_target, filtered_data], ignore_index=True)
+        df_target = df_target.drop_duplicates(subset=['Распределительный Центр', 'Дата'], keep='last')
+        df_target.to_excel(second_file_path, sheet_name=sheet_name_tgt, index=False)
+
         workbook.save(second_file_path)
 
     except Exception as e:
-        messagebox.showerror("Ошибка", f"Произошла ошибка: {str(e)}")
+        update_status(f"Произошла ошибка: {str(e)}", "red")
+
+def update_status(message, color):
+    status_label.config(text=message, fg=color)
+    root.update_idletasks()  # Обновляем интерфейс
 
 # Создаем GUI
 root = tk.Tk()
