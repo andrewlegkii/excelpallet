@@ -86,7 +86,7 @@ def process_data():
         filtered_data = df_source[(df_source['Распределительный Центр'] == rcenter) & (df_source['Дата'] == pd.to_datetime(date).date())]
 
         if filtered_data.empty:
-            messagebox.showwarning("Ошибка", "Нет данных для выбранного распределительного центра и даты.")
+            status_label.config(text="Ошибка: Нет данных для выбранного распределительного центра и даты.", fg="red")
             return
 
         if 'Количество паллет' not in filtered_data.columns:
@@ -99,50 +99,38 @@ def process_data():
 
         df_target['Дата'] = pd.to_datetime(df_target['Дата'], format='%Y-%m-%d', errors='coerce').dt.date
 
-        # Проверка на существование данных с таким распределительным центром и датой
-        existing_data_index = df_target[(df_target['Распределительный Центр'] == rcenter) & (df_target['Дата'] == pd.to_datetime(date).date())].index
-
-        # Загружаем рабочую книгу для форматирования
         workbook = load_workbook(second_file_path)
         sheet = workbook[sheet_name_tgt]
 
-        # Сначала очищаем старые данные, если они есть
-        for index in existing_data_index:
-            sheet.delete_rows(index + 2)  # +2 учитывает заголовок и 0-индекс
+        existing_data_index = df_target[(df_target['Распределительный Центр'] == rcenter) & (df_target['Дата'] == pd.to_datetime(date).date())].index
 
-        if filtered_data.empty:
-            messagebox.showwarning("Ошибка", "Нет данных для добавления.")
-            return
+        if not existing_data_index.empty:
+            # Обновляем существующие строки и выделяем цветом
+            fill_green = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
+            fill_red = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
 
-        # Добавляем новые данные
-        new_row_start = sheet.max_row + 1
-        for index, row in filtered_data.iterrows():
-            new_row = [row['Дата'], row['Распределительный Центр'], row['Количество паллет']]
-            sheet.append(new_row)
+            for index in existing_data_index:
+                row_num = index + 2  # +2 для учета заголовка и 0-индекса
+                pallets_cell = sheet.cell(row=row_num, column=df_target.columns.get_loc('Количество паллет') + 1)
 
-        # Сравнение данных и выделение ячеек
-        fill_green = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")  # Зеленый
-        fill_red = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")  # Красный
-
-        # Обновляем существующие данные
-        for row in sheet.iter_rows(min_row=2, max_row=new_row_start-1, min_col=1, max_col=3):
-            rcenter_cell = row[1]
-            date_cell = row[0]
-            pallets_cell = row[2]
-
-            existing_row = df_target[(df_target['Распределительный Центр'] == rcenter_cell.value) & (df_target['Дата'] == date_cell.value)]
-
-            if not existing_row.empty:
-                existing_pallets = existing_row['Количество паллет'].sum()
-                new_pallets = pallets_cell.value
+                existing_pallets = df_target.loc[index, 'Количество паллет']
+                new_pallets = filtered_data['Количество паллет'].sum()
 
                 if existing_pallets == new_pallets:
                     pallets_cell.fill = fill_green
                 else:
                     pallets_cell.fill = fill_red
                     status_label.config(text="Ошибка: Количество паллет не совпадает!", fg="red")
-            else:
-                status_label.config(text="Запрос обработан", fg="green")
+        else:
+            # Добавляем новые строки и проверяем дублирование
+            new_rows = []
+            for _, row in filtered_data.iterrows():
+                new_rows.append([row['Дата'], row['Распределительный Центр'], row['Количество паллет']])
+
+            for new_row in new_rows:
+                sheet.append(new_row)
+
+            status_label.config(text="Запрос обработан", fg="green")
 
         # Сохраняем изменения в файле
         workbook.save(second_file_path)
