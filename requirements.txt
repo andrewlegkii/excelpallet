@@ -4,3 +4,4 @@ tk
 tkcalendar
 pyinstaller
 babel
+pip install xlrd==1.2.0

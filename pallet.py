@@ -4,15 +4,15 @@ from tkinter import filedialog, messagebox, ttk
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 
-def load_file(label, book_var, combobox):
+def load_file(label, book_var):
     filepath = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
     if filepath:
         label.config(text=f"Выбранный файл: {filepath}")
         try:
             excel_file = pd.ExcelFile(filepath)
             book_var.set(excel_file.sheet_names[0] if excel_file.sheet_names else '')
-            combobox['values'] = excel_file.sheet_names
-            combobox.current(0)
+            book_combobox['values'] = excel_file.sheet_names
+            book_combobox.current(0)
             return filepath
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось открыть файл: {str(e)}")
@@ -20,12 +20,12 @@ def load_file(label, book_var, combobox):
 
 def select_first_file():
     global first_file_path
-    first_file_path = load_file(first_file_label, first_book_var, book_combobox)
+    first_file_path = load_file(first_file_label, first_book_var)
     update_rcenter_list()
 
 def select_second_file():
     global second_file_path
-    second_file_path = load_file(second_file_label, second_book_var, book_combobox2)
+    second_file_path = load_file(second_file_label, second_book_var)
 
 def update_rcenter_list():
     if not first_file_path:
@@ -82,8 +82,8 @@ def process_data():
         date = date_combobox.get()
         rcenter = rcenter_combo.get()
 
-        df_source['Дата'] = pd.to_datetime(df_source['Дата'], format='%Y-%m-%d', errors='coerce')
-        filtered_data = df_source[(df_source['Распределительный Центр'] == rcenter) & (df_source['Дата'].dt.strftime('%Y-%m-%d') == date)]
+        df_source['Дата'] = pd.to_datetime(df_source['Дата'], format='%Y-%m-%d', errors='coerce').dt.date
+        filtered_data = df_source[(df_source['Распределительный Центр'] == rcenter) & (df_source['Дата'] == pd.to_datetime(date).date())]
 
         if filtered_data.empty:
             messagebox.showwarning("Ошибка", "Нет данных для выбранного распределительного центра и даты.")
@@ -97,44 +97,29 @@ def process_data():
             messagebox.showerror("Ошибка", "В целевой таблице отсутствуют необходимые колонки.")
             return
 
-        df_target['Дата'] = pd.to_datetime(df_target['Дата'], format='%Y-%m-%d', errors='coerce')
-        existing_data_index = df_target[(df_target['Распределительный Центр'] == rcenter) & (df_target['Дата'] == pd.to_datetime(date))].index
+        df_target['Дата'] = pd.to_datetime(df_target['Дата'], format='%Y-%m-%d', errors='coerce').dt.date
 
-        # Проверяем наличие данных
-        if not existing_data_index.empty:
-            if 'Количество паллет' in df_target.columns:
-                existing_pallets = df_target.loc[existing_data_index, 'Количество паллет'].sum()
-                new_pallets = filtered_data['Количество паллет'].sum()
+        # Обновляем данные в целевой таблице
+        existing_data = df_target[(df_target['Распределительный Центр'] == rcenter) & (df_target['Дата'] == pd.to_datetime(date).date())]
 
-                # Загружаем workbook и worksheet только если данные существуют
-                workbook = load_workbook(second_file_path)
-                sheet = workbook[sheet_name_tgt]
+        workbook = load_workbook(second_file_path)
+        sheet = workbook[sheet_name_tgt]
 
-                if existing_pallets == new_pallets:
-                    fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
-                    for index in existing_data_index:
-                        cell = sheet.cell(row=index+2, column=df_target.columns.get_loc('Количество паллет') + 1)
-                        cell.fill = fill
-                else:
-                    fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
-                    for index in existing_data_index:
-                        cell = sheet.cell(row=index+2, column=df_target.columns.get_loc('Количество паллет') + 1)
-                        cell.fill = fill
-                    messagebox.showwarning("Предупреждение", "Количество паллет не совпадает с указанным значением!")
+        # Удаляем существующие данные
+        for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, min_col=1, max_col=sheet.max_column):
+            if row[0].value == rcenter and row[1].value == date:
+                sheet.delete_rows(row[0].row)
 
-                df_target.loc[existing_data_index, 'Количество паллет'] = existing_pallets + new_pallets
+        if filtered_data.empty:
+            messagebox.showwarning("Ошибка", "Нет данных для добавления.")
+            return
 
-                # Сохраняем изменения в файле Excel
-                df_target.to_excel(second_file_path, sheet_name=sheet_name_tgt, index=False)
-                workbook.save(second_file_path)
+        for index, row in filtered_data.iterrows():
+            new_row = [row['Дата'], row['Распределительный Центр'], row['Количество паллет']]
+            sheet.append(new_row)
 
-            else:
-                messagebox.showerror("Ошибка", "В целевой таблице отсутствует колонка 'Количество паллет'.")
-                return
-        else:
-            df_target = pd.concat([df_target, filtered_data], ignore_index=True)
-            df_target = df_target.drop_duplicates(subset=['Распределительный Центр', 'Дата'], keep='last')
-            df_target.to_excel(second_file_path, sheet_name=sheet_name_tgt, index=False)
+        # Сохраняем изменения в файле
+        workbook.save(second_file_path)
 
         messagebox.showinfo("Успех", "Данные успешно добавлены и обновлены в существующей таблице!")
 
